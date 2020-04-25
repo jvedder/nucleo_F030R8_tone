@@ -1,0 +1,8 @@
+#ignore the Setting Folder
+.settings/
+
+#ignore the build output folder
+Debug/
+
+#ignore worksheet lock files
+.~lock.*
