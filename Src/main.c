@@ -160,7 +160,7 @@ static void MX_TIM16_Init(void)
     TIM16->DIER  = 0x0000;
     TIM16->SR    = 0x0003;    // clear interrupt flags
     TIM16->CCMR1 = 0x0068;
-    TIM16->CCER  = 0x000D;  // CH3 Rising Edge
+    TIM16->CCER  = 0x0005;   // Enable CH1 and CH1N
     TIM16->CNT   = 0x0000;   // clear counter
     TIM16-> PSC  = 0x0010;
     TIM16->ARR   =   20000;  // period (autoreload value)
