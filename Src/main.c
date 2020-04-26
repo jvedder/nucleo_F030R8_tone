@@ -41,6 +41,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc;
+
 TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart2;
@@ -53,7 +55,8 @@ UART_HandleTypeDef huart2;
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
-static void MX_TIM16_Init(void);
+static void JV_ADC_Init(void);
+static void JV_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -92,7 +95,8 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
-  MX_TIM16_Init();
+  JV_ADC_Init();
+  JV_TIM16_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -119,9 +123,11 @@ void SystemClock_Config(void)
 
   /** Initializes the CPU, AHB and APB busses clocks 
   */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI|RCC_OSCILLATORTYPE_HSI14;
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSI14State = RCC_HSI14_ON;
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.HSI14CalibrationValue = 16;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
   RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL12;
@@ -145,11 +151,128 @@ void SystemClock_Config(void)
 }
 
 /**
+  * @brief ADC Initialization Function
+  * @param None
+  * @retval None
+  */
+static void JV_ADC_Init(void)
+{
+    /* Peripheral clock enable */
+    __HAL_RCC_ADC1_CLK_ENABLE();
+
+    // Reset the ADC by disabling it
+    ADC1->CR  = (uint32_t) 0x00000000;     // reset the ADC
+
+    // ADC control register (ADC_CR)
+    // [31]  ADCAL = 0: No ADC Calibration command
+    // [4]   ADSTP = 0: No ADC stop conversion commanded
+    // [2]   ADSTART = 0: No ADC conversion command
+    // [1]   ADDIS = 0: No ADC Disable command
+    // [0]   ADEN = 1: ADC is enabled
+    ADC1->CR  = (uint32_t) 0x00000001;     // Enable the ADC
+
+    // ADC interrupt and status register (ADC_ISR)
+    ADC1->ISR = (uint32_t) 0x0000009F;     // clear all interrupt flags
+
+    // ADC interrupt enable register (ADC_IER)
+    ADC1->IER = (uint32_t) 0x00000000;     // disable all interrupts
+
+    // ADC configuration register 1 (ADC_CFGR1)
+    // [30:26] AWDCH = 00000: Watchdog channel
+    // [23]    AWDEN = 0: Watchdog is disabled
+    // [22]    AWDSGL = 0: Watchdog all channels
+    // [16]    DISCEN = 0: Discontinuous mode disabled
+    // [15]    AUTOOFF = 0: Auto-off mode disabled
+    // [14]    WAIT = 0: Wait conversion mode off
+    // [13]    CONT = 1: Continuous conversion mode
+    // [12]    OVRMOD = 0: preserve old data on overrun
+    // [11:10] EXTEN = 00: Hardware trigger detection disabled (conversions can be started by software)
+    // [8:6]   EXTSEL = 000: External TRG0 [don't care]
+    // [5]     ALIGN = 0: Right alignment
+    // [4:3]   RES = 00: 12 bit resolution
+    // [2]     SCANDIR = 0: Upward scan (from CHSEL0 to CHSEL17) [don't care]
+    // [1]     DMACFG = 0: DMA one shot mode selected [don't care]
+    // [0]     DMAEN = 0: DMA disabled
+    ADC1->CFGR1 = (uint32_t) 0x00002000;
+
+    // ADC configuration register 2 (ADC_CFGR2)
+    //[31:30] CKMODE = 00: ADCCLK (Asynchronous clock mode),
+    ADC1->CFGR2 = (uint32_t) 0x00000000;
+
+    // ADC sampling time register (ADC_SMPR)
+    //[2:0] SMP = 111: 239.5 ADC clock cycles
+    ADC1->SMPR = (uint32_t) 0x00000007;
+
+    // ADC watchdog threshold register (ADC_TR)
+    // [27:16] HT = 0xFFF: Analog watchdog higher threshold
+    // [11:0]  LT = 0x000: Analog watchdog lower threshold
+    ADC1->TR = (uint32_t) 0xFFFF0000;
+
+    // ADC channel selection register (ADC_CHSELR)
+    // Only input channel 0 is selected for conversion
+    ADC1->CHSELR = (uint32_t) 0x00000001;
+
+    // ADC common configuration register (ADC_CCR)
+    // [23] TSEN   = 0: Temperature sensor disabled
+    // [22] VREFEN = 0: VREFINT disabled
+    ADC1_COMMON->CCR = (uint32_t) 0x00000000;
+
+    // ADC control register (ADC_CR)
+    // [31]  ADCAL = 0: No ADC Calibration command
+    // [4]   ADSTP = 0: No ADC stop conversion commanded
+    // [2]   ADSTART = 1: Start the ADC
+    // [1]   ADDIS = 0: No ADC Disable command
+    // [0]   ADEN = 1: ADC is enabled
+    ADC1->CR  = (uint32_t) 0x00000005;  // Start the ADC conversions
+
+  /* USER CODE END ADC_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC_Init 1 */
+
+  /* USER CODE END ADC_Init 1 */
+  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
+  */
+  hadc.Instance = ADC1;
+  hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
+  hadc.Init.Resolution = ADC_RESOLUTION_12B;
+  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
+  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc.Init.LowPowerAutoWait = DISABLE;
+  hadc.Init.LowPowerAutoPowerOff = DISABLE;
+  hadc.Init.ContinuousConvMode = ENABLE;
+  hadc.Init.DiscontinuousConvMode = DISABLE;
+  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
+  hadc.Init.DMAContinuousRequests = DISABLE;
+  hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
+  if (HAL_ADC_Init(&hadc) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /** Configure for the selected ADC regular channel to be converted. 
+  */
+  sConfig.Channel = ADC_CHANNEL_0;
+  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
+  sConfig.SamplingTime = ADC_SAMPLETIME_41CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC_Init 2 */
+
+  /* USER CODE END ADC_Init 2 */
+
+}
+
+/**
   * @brief TIM16 Initialization Function
   * @param None
   * @retval None
   */
-static void MX_TIM16_Init(void)
+static void JV_TIM16_Init(void)
 {
     /* Peripheral clock enable */
     __HAL_RCC_TIM16_CLK_ENABLE();
@@ -162,10 +285,10 @@ static void MX_TIM16_Init(void)
     TIM16->CCMR1 = 0x0068;
     TIM16->CCER  = 0x0005;   // Enable CH1 and CH1N
     TIM16->CNT   = 0x0000;   // clear counter
-    TIM16-> PSC  = 0x0010;
-    TIM16->ARR   =   20000;  // period (autoreload value)
+    TIM16->PSC   =     89;
+    TIM16->ARR   =   31;  // period (autoreload value)
     TIM16->RCR   = 0x000;
-    TIM16->CCR1  =   10000;  // PWM Value
+    TIM16->CCR1  =   16;  // PWM Value
     TIM16->BDTR  = 0xA000;
     TIM16->DCR   = 0x0000;
     TIM16->DMAR  = 0x0001;
@@ -253,6 +376,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Alternate = GPIO_AF2_TIM16;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PA0 = ADC_IN0 */
+  GPIO_InitStruct.Pin = GPIO_PIN_0;
+  GPIO_InitStruct.Mode = GPIO_MODE_ANALOG;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
 }
 
