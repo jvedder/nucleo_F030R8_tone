@@ -50,6 +50,10 @@ extern "C" {
 
 /* USER CODE END EM */
 
+extern ADC_HandleTypeDef hadc;
+extern TIM_HandleTypeDef htim16;
+extern UART_HandleTypeDef huart2;
+
 void HAL_TIM_MspPostInit(TIM_HandleTypeDef *htim);
 
 /* Exported functions prototypes ---------------------------------------------*/

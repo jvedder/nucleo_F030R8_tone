@@ -24,6 +24,10 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 
+#include <string.h>
+#include <stdio.h>
+#include <inttypes.h>
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,6 +51,7 @@ TIM_HandleTypeDef htim16;
 
 UART_HandleTypeDef huart2;
 
+
 /* USER CODE BEGIN PV */
 
 /* USER CODE END PV */
@@ -56,6 +61,10 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void JV_ADC_Init(void);
+static void JV_ADC_Start(void);
+static uint16_t JV_ADC_GetResult(void);
+void Delay_ms(uint32_t delay_ms);
+
 static void JV_TIM16_Init(void);
 /* USER CODE BEGIN PFP */
 
@@ -103,8 +112,29 @@ int main(void)
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+
   while (1)
   {
+     uint32_t start_time_ms = HAL_GetTick();
+     JV_ADC_Start();
+     uint32_t adc = JV_ADC_GetResult();
+     printf("FRQ: %lu\r\n", (adc + 1) * 8);
+
+     uint64_t freq = (adc + 1) * 8; // approx 1 to 32K
+     uint64_t period = 48000000ULL / freq;
+     uint32_t prescale = period >> 16;
+     period = period / (uint64_t) (prescale + 1);
+
+     TIM16->PSC = prescale;
+     TIM16->ARR = period-1;
+     TIM16->CCR1 = period/2;
+
+     // wait remainder of 100ms
+     while ( (HAL_GetTick() - start_time_ms) < 100)
+     {
+         // spin wait
+     }
+
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -164,11 +194,11 @@ static void JV_ADC_Init(void)
     ADC1->CR  = (uint32_t) 0x00000000;     // reset the ADC
 
     // ADC control register (ADC_CR)
-    // [31]  ADCAL = 0: No ADC Calibration command
-    // [4]   ADSTP = 0: No ADC stop conversion commanded
+    // [31]  ADCAL   = 0: No ADC Calibration command
+    // [4]   ADSTP   = 0: No ADC stop conversion commanded
     // [2]   ADSTART = 0: No ADC conversion command
-    // [1]   ADDIS = 0: No ADC Disable command
-    // [0]   ADEN = 1: ADC is enabled
+    // [1]   ADDIS   = 0: No ADC Disable command
+    // [0]   ADEN    = 1: ADC is enabled
     ADC1->CR  = (uint32_t) 0x00000001;     // Enable the ADC
 
     // ADC interrupt and status register (ADC_ISR)
@@ -178,22 +208,22 @@ static void JV_ADC_Init(void)
     ADC1->IER = (uint32_t) 0x00000000;     // disable all interrupts
 
     // ADC configuration register 1 (ADC_CFGR1)
-    // [30:26] AWDCH = 00000: Watchdog channel
-    // [23]    AWDEN = 0: Watchdog is disabled
-    // [22]    AWDSGL = 0: Watchdog all channels
-    // [16]    DISCEN = 0: Discontinuous mode disabled
+    // [30:26] AWDCH   = 00000: Watchdog channel
+    // [23]    AWDEN   = 0: Watchdog is disabled
+    // [22]    AWDSGL  = 0: Watchdog all channels
+    // [16]    DISCEN  = 0: Discontinuous mode disabled
     // [15]    AUTOOFF = 0: Auto-off mode disabled
-    // [14]    WAIT = 0: Wait conversion mode off
-    // [13]    CONT = 1: Continuous conversion mode
-    // [12]    OVRMOD = 0: preserve old data on overrun
-    // [11:10] EXTEN = 00: Hardware trigger detection disabled (conversions can be started by software)
-    // [8:6]   EXTSEL = 000: External TRG0 [don't care]
-    // [5]     ALIGN = 0: Right alignment
-    // [4:3]   RES = 00: 12 bit resolution
+    // [14]    WAIT    = 0: Wait conversion mode off
+    // [13]    CONT    = 0: Single conversion mode
+    // [12]    OVRMOD  = 0: preserve old data on overrun
+    // [11:10] EXTEN   = 00: Hardware trigger detection disabled (conversions can be started by software)
+    // [8:6]   EXTSEL  = 000: External TRG0 [don't care]
+    // [5]     ALIGN   = 0: Right alignment
+    // [4:3]   RES     = 00: 12 bit resolution
     // [2]     SCANDIR = 0: Upward scan (from CHSEL0 to CHSEL17) [don't care]
-    // [1]     DMACFG = 0: DMA one shot mode selected [don't care]
-    // [0]     DMAEN = 0: DMA disabled
-    ADC1->CFGR1 = (uint32_t) 0x00002000;
+    // [1]     DMACFG  = 0: DMA one shot mode selected [don't care]
+    // [0]     DMAEN   = 0: DMA disabled
+    ADC1->CFGR1 = (uint32_t) 0x00000000;
 
     // ADC configuration register 2 (ADC_CFGR2)
     //[31:30] CKMODE = 00: ADCCLK (Asynchronous clock mode),
@@ -217,55 +247,50 @@ static void JV_ADC_Init(void)
     // [22] VREFEN = 0: VREFINT disabled
     ADC1_COMMON->CCR = (uint32_t) 0x00000000;
 
-    // ADC control register (ADC_CR)
-    // [31]  ADCAL = 0: No ADC Calibration command
-    // [4]   ADSTP = 0: No ADC stop conversion commanded
-    // [2]   ADSTART = 1: Start the ADC
-    // [1]   ADDIS = 0: No ADC Disable command
-    // [0]   ADEN = 1: ADC is enabled
-    ADC1->CR  = (uint32_t) 0x00000005;  // Start the ADC conversions
-
-  /* USER CODE END ADC_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC_Init 1 */
-
-  /* USER CODE END ADC_Init 1 */
-  /** Configure the global features of the ADC (Clock, Resolution, Data Alignment and number of conversion) 
-  */
-  hadc.Instance = ADC1;
-  hadc.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
-  hadc.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc.Init.ScanConvMode = ADC_SCAN_DIRECTION_FORWARD;
-  hadc.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  hadc.Init.LowPowerAutoWait = DISABLE;
-  hadc.Init.LowPowerAutoPowerOff = DISABLE;
-  hadc.Init.ContinuousConvMode = ENABLE;
-  hadc.Init.DiscontinuousConvMode = DISABLE;
-  hadc.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc.Init.DMAContinuousRequests = DISABLE;
-  hadc.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  if (HAL_ADC_Init(&hadc) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure for the selected ADC regular channel to be converted. 
-  */
-  sConfig.Channel = ADC_CHANNEL_0;
-  sConfig.Rank = ADC_RANK_CHANNEL_NUMBER;
-  sConfig.SamplingTime = ADC_SAMPLETIME_41CYCLES_5;
-  if (HAL_ADC_ConfigChannel(&hadc, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC_Init 2 */
-
-  /* USER CODE END ADC_Init 2 */
 
 }
+
+/**
+  * @brief ADC Start Conversion
+  * @param None
+  * @retval None
+  */
+static void JV_ADC_Start(void)
+{
+    // ADC control register (ADC_CR)
+    // [31]  ADCAL   = 0: No ADC Calibration command
+    // [4]   ADSTP   = 0: No ADC stop conversion commanded
+    // [2]   ADSTART = 1: Start the ADC
+    // [1]   ADDIS   = 0: No ADC Disable command
+    // [0]   ADEN    = 1: ADC is enabled
+    ADC1->CR  = (uint32_t) 0x00000005;  // Start the ADC conversions
+
+    /* Clear all interrupt flags */
+    ADC1->ISR = (uint32_t) 0x0000009F;
+}
+
+/**
+  * @brief ADC Wait for Conversion Complete and get value
+  * @param None
+  * @retval None
+  */
+static uint16_t JV_ADC_GetResult(void)
+{
+    /* Wait for End of Conversion Flag */
+    while ((ADC1->ISR & ADC_ISR_EOC) == 0)
+    {
+        // spin wait for EOC flag
+        // TODO: Add timeout logic
+    }
+
+    /* Clear all interrupt flags */
+    ADC1->ISR = (uint32_t) 0x0000009F;
+
+    /* return last conversion value */
+    return (uint16_t) ADC1->DR;
+}
+
+
 
 /**
   * @brief TIM16 Initialization Function
@@ -386,6 +411,21 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
+
+void Delay_ms(uint32_t delay_ms)
+{
+    /**
+     * This should correctly handle SysTick roll-overs.
+     * See:  https://stackoverflow.com/questions/61443/
+     */
+    uint32_t start_time_ms = HAL_GetTick();
+    while ( (HAL_GetTick() - start_time_ms) < delay_ms)
+    {
+        // spin wait
+    }
+    return;
+}
+
 
 /* USER CODE END 4 */
 
