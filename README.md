@@ -7,3 +7,5 @@ Place a piezo speaker across ```PA6``` and ```PB6```, which are mapped to ```TIM
 Connect a potentiometer wiper at ```PA0```, which is mapped to ```ADC1_IN0```.  Connect the ends of the potentiometer to ```CN7``` pin 8 (```GND```) and pin 12 (```3.3V```).
 
 The current frequency is output on the STLINK UART (38400,8N1) and udated every 100 ms.
+
+The TIM16 and ADC1 drivers are hand-written.
